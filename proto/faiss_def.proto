@@ -1,0 +1,122 @@
+syntax = "proto3";
+package faiss_server;
+
+//ping请求接口
+message PingRequest {
+	string payload = 1;
+}
+//ping返回报文
+message PingResponse {
+	string payload = 1;
+}
+
+//创建db请求
+message DbNewRequest {
+	string db_name = 1;
+	uint64 max_size = 2; //default 10^8, max 10^10 - 1
+	string model = 3;  //train model
+	string request_id = 4;
+}
+//删除db请求
+message DbDelRequest {
+	string db_name = 1;
+	string request_id = 2;
+}
+
+//默认返回
+message EmptyResponse {
+	int64 error_code = 1;
+	string error_msg = 2;
+	string request_id = 3;
+}
+
+//查询db列表请求
+message DbListRequest {
+	string request_id = 1;
+}
+
+//查询db列表返回结果
+message DbListResponse {
+	message DbStatus {
+		string name = 1;
+		uint64 ntotal = 2;
+		uint64 max_size = 3; 
+		uint64 curr_max_id = 4;
+		uint64 curr_persist_max_id = 5;
+		string persist_path = 6;
+		string raw_data_path = 7;
+		uint64 dimension = 8;
+		string model = 9;
+		uint64 black_list_len = 10;
+	}
+	repeated DbStatus db_status = 2;
+	int64 error_code = 3;
+	string error_msg = 4;
+	string request_id = 5;
+}
+
+//获取或者删除一条特征请求
+message HGetDelRequest {
+	string db_name = 1;
+	uint64 id = 3;
+	string request_id = 4;
+}
+
+//获取一个特征的返回
+message HGetResponse {
+	bytes feature = 2;
+	uint64 dimension = 5;
+	string request_id = 6;
+	int64 error_code = 7;
+	string error_msg = 8;
+}
+
+//添加一条特征的请求
+message HSetRequest {
+	string db_name = 1;
+	bytes feature = 3;
+	string request_id = 7;
+}
+
+//添加一条特征的返回
+message HSetResponse {
+	uint64 id = 1;
+	string request_id = 2;
+	int64 error_code = 3;
+	string error_msg = 4;
+}
+//ANN检索请求
+message HSearchRequest {
+	string db_name = 1;
+	bytes feature = 2;
+	uint64 top_k = 3;
+	
+	enum DistanceType {
+		Euclid = 0;
+		Cosine = 1;	
+	} 
+	DistanceType distance_type = 9; 
+	string request_id = 10;
+}
+//ANN 检索返回
+message HSearchResponse {
+	message Result {
+		float score = 2;
+		uint64 id = 3;
+	}
+	repeated Result results = 1;
+	string request_id = 2;
+	int64 error_code = 3;
+	string error_msg = 4;
+}
+service FaissService
+{
+	rpc Ping(PingRequest) returns (PingResponse);
+	rpc DbNew(DbNewRequest) returns (EmptyResponse);
+	rpc DbDel(DbDelRequest) returns (EmptyResponse);
+	rpc DbList(DbListRequest) returns (DbListResponse);
+	rpc HSet(HSetRequest) returns (HSetResponse);
+	rpc HDel(HGetDelRequest) returns (EmptyResponse);
+	rpc HGet(HGetDelRequest) returns (HGetResponse);
+	rpc HSearch(HSearchRequest) returns (HSearchResponse);
+};
