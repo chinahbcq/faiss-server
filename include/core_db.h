@@ -4,10 +4,12 @@
 #include "share_lock.h"
 #include "utils.h"
 #include <atomic>
+#include <sstream>
+#include <gflags/gflags.h>
+#include <glog/logging.h>
 #include "faiss_def.grpc.pb.h"
 #include "faiss/gpu/StandardGpuResources.h"
 #include "faiss/gpu/GpuIndexIVFPQ.h"
-
 #include "faiss/gpu/GpuAutoTune.h"
 #include "faiss/IndexIVFPQ.h"
 #include "faiss/IndexFlat.h"

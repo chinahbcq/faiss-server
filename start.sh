@@ -1,0 +1,1 @@
+./faiss_server --port 3838 --log_dir ./log  --logtostderr true

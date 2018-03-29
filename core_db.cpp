@@ -3,7 +3,6 @@
 FaissDB::FaissDB(std::string &db_name, 
 		std::string &model_path,
 		size_t max_size):LmDB(db_name),modelPath(model_path), maxSize(max_size) {
-	printf("faissdb construct\n");
 	lock = new WfirstRWLock;
 	index = NULL;
 	persistPath = "./data/" + db_name + ".index";
@@ -12,50 +11,58 @@ FaissDB::FaissDB(std::string &db_name,
 	writeFlag = true;
 }
 int FaissDB::reload(StandardGpuResources *rs) {
+	std::ostringstream oss;
 	bool rt = checkPathExists(this->persistPath);	
-	printf("%s status: %d\n", (this->persistPath).c_str(), rt);
+	oss << "persist_path:" << this->persistPath
+		<< " is_exist:" << rt;
 	int rc = 0, rc2 = 0;
 	if (rt) {//持久化文件存在 
 		//加载黑名单
 		rc2 = this->loadBlackList(SBlackListKey);
 		if (rc2 != MDB_NOTFOUND && rc2 !=  0) { //没有黑名单可加载
-			printf("get blacklist from lmdb failed: rc:%d\n", rc);
+			oss << " error_msg: load black_list failed:" << rc;
+			LOG(WARNING) << oss.str();
 			return ErrorCode::INTERNAL;
 		}
-		printf("get blacklist from lmdb OK, num:%d\n", blackList.size());
+		oss << " load_blacklist:OK black_list_len:" << blackList.size();
 
 		rc = this->loadIndex(rs, this->persistPath);
 		if (rc != 0) {
-			printf("load %s failed:%d\n", (this->persistPath).c_str(), rc);
+			oss << " load_index:failed,resp:" << rc;
+			LOG(WARNING) << oss.str();
 			return rc;
 		} 
-		printf("load %s OK\n", (this->persistPath).c_str());
+		oss << " load_index:OK";
 		// 需要将db的其他信息maxID,maxPersistID读取出来
 		rc = this->loadLostIndex();
-		printf("load lost index from lmdb %s\n", rc == 0 ? "OK":"FAILED");
-
+		oss << " load_lost_index:" << (rc == 0 ? "OK":"FAILED");
+		LOG(INFO) << oss.str();
 		return rc;
 	}
 	rt = checkPathExists(modelPath);	
-	printf("%s status: %d\n", modelPath.c_str(), rt);
+	oss << " model_path:" << modelPath
+		<< " is_exist:" << rt;
 	if (rt) {//训练模型文件存在 
 		rc = this->loadIndex(rs, modelPath);
-		printf("load lost index from %s %s\n", modelPath.c_str(), rc == 0 ? "OK":"FAILED");
+		oss << " load_index:" << (rc == 0 ? "OK":"FAILED");
 		if (rc != 0) {
+			LOG(WARNING) << oss.str();
 			return rc;
 		}
 		// 考虑这种情况下，也可能存在删除黑名单,这将是非法数据
 		rc = lmdbDel(SBlackListKey);
 		if (rc == MDB_NOTFOUND) {
-			printf("no blackList found in lmdb\n");
+			LOG(INFO) << oss.str();	
 			return 0;
 		} else if (rc != 0) {
-			printf("delete blackList from lmdb failed:%d\n", rc);
+			oss << " delete_black_list:" << rc;
+			LOG(WARNING) << oss.str();	
 			return rc;
 		}
-		printf("delete blackList from lmdb OK\n");
+		LOG(INFO) << oss.str();
 		return 0;
 	}
+	LOG(WARNING) << oss.str();
 	return ErrorCode::NOT_FOUND;
 }
 int FaissDB::loadLostIndex() {
@@ -67,28 +74,23 @@ int FaissDB::loadLostIndex() {
 	rc1 = this->getID(SPersistIDKey, &maxPersistID);
 	rc2 = this->getID(SMaxIDKey, &maxID);
 	if (rc1 != 0 || rc2 != 0) {
-		printf("get id from lmdb failed: rc1:%d,rc2:%d\n", rc1, rc2);
 		return -1;
 	}
 
 	//读取成功
 	this->maxPersistID = maxPersistID;
 	this->maxID = maxID;
-
-#if 1
-	for (auto it = blackList.begin(); it != blackList.end(); it ++) {
-		printf("%ld ", *it);
-	}
-	printf("\n");
-#endif
+	std::ostringstream oss;
 	//db从lmdb中加载未持久化的数据
-	printf("maxID:%ld, maxPersistID:%ld\n", maxID, maxPersistID);
+	oss << "maxID:"<< maxID
+		<<" maxPersistID:" << maxPersistID;
 	
 	//index中最新的id <= lmdb中持久化的较为旧的id，则不做操作，
 	//认为同步，小的部分会被覆盖
 	if (maxID <= maxPersistID) {
 		writeFlag = false;
-		printf("need no index load\n");
+		oss << " error_msg:need no index load";
+		LOG(INFO) << oss.str();
 		return 0;
 	}
 
@@ -98,49 +100,52 @@ int FaissDB::loadLostIndex() {
 		size_t feaLen = index->d;
 		rc1 = getFeature(id, &feature, &feaLen); 
 		if (rc1 == MDB_NOTFOUND) {
-			printf("feature id:%ld not found\n", id);
+			LOG(WARNING) << "feature_id("<< id <<"):not found";
 			continue;
 		} else if (rc1 != 0) {
-			printf("get feature id:%ld failed\n", id);
-			delete feature;
-			feature = NULL;
+			oss << "feature_id("<< id <<"):get failed:"<< rc1;
+			LOG(WARNING) << oss.str();
 			return rc1;
 		}
 		if (feaLen != index->d) {
-			printf("read invalid feature, need len:%ld, get len:%ld\n", index->d, feaLen);
+			oss << " need_fea_len:" << index->d
+				<< " get_fea_len:" << feaLen;
 			delete feature;
 			feature = NULL;
+			LOG(WARNING) << oss.str();
 			return -1;
 		}
-#if 0 
-		for (int i = 0; i < index->d; i++) {
-			printf("%f ", feature[i]);
-		}
-		printf("\n");
-#endif
 		//将特征添加进index	
 		long _id = (long)id;
 		index->add_with_ids(1, feature, &_id);
 	}
 	
 	writeFlag = true;
+	oss << " load_lost_index:OK";
+	LOG(INFO) << oss.str();
 	return 0;
 }
 int FaissDB::loadIndex(StandardGpuResources *resources,std::string &idxPath) {
-	printf("-------------loadIndex----------------\n");
+	std::ostringstream oss;
 	try {
 		GpuIndexIVFPQConfig config;
 		config.device = 0;
 		faiss::Index *file_index = faiss::read_index(idxPath.c_str());
 		faiss::IndexIVFPQ *cpu_index = dynamic_cast<faiss::IndexIVFPQ *>(file_index);
+		oss << "idx_path:" << idxPath
+			<< " black_size:" << blackList.size()
+			<< " cpu_ntotal:" << cpu_index->ntotal;
 		if (blackList.size() > 0) {//若黑名单不为空
 			auto start = blackList.begin();
 			auto end = blackList.end();
 			end = --end;
-			printf("before remove ntotal:%ld, start:%ld, end:%ld\n", cpu_index->ntotal, *start,1 + *end);
+			
 			faiss::IDSelectorRange range(*start, 1 + *end);
 			cpu_index->remove_ids(range);	
-			printf("after remove ntotal:%d\n", cpu_index->ntotal);
+	
+			oss << " black_start:" << *start
+				<< " black_end:" << 1+*end
+				<< " new_cpu_ntotal:" << cpu_index->ntotal;
 
 			//将cpu_index 再持久化一次
 			write_index(cpu_index, (this->persistPath).c_str());
@@ -151,44 +156,36 @@ int FaissDB::loadIndex(StandardGpuResources *resources,std::string &idxPath) {
 			if (rc == MDB_NOTFOUND) {
 				//nothing
 			} else if (rc != 0) {
-				printf("delete blackList from lmdb failed:%d\n", rc);
+				oss << " error_msg:delete blackList from lmdb failed:" << rc;
+				LOG(WARNING) << oss.str();
 				return rc;
 			}
-			printf("delete blackList from lmdb OK\n");
+			oss << " delete_black_list:ok";
 		}
 
 		this->index = new GpuIndexIVFPQ(resources, cpu_index, config);
 		this->index->setNumProbes(NProbes);
 
-		printf("index dimenstion:%d, index ntotal:%d\n", index->d,  index->ntotal);
+		oss << " dim:" << index->d
+			<< " gpu_ntotal:" << index->ntotal;
 		delete file_index;
 		file_index = NULL;
-		/*try {
-		  faiss::Index * cpuIndex = faiss::read_index(indexFileName.c_str());
-		  faiss::gpu::GpuClonerOptions options;
-		  options.indicesOptions = faiss::gpu::INDICES_64_BIT;
-		  options.usePrecomputed = false;
-		  options.reserveVecs = 0;
-		  options.useFloat16 = true;
-		//options.verbose = true;
-		index = dynamic_cast<faiss::gpu::GpuIndexIVFPQ *>(
-		faiss::gpu::index_cpu_to_gpu(resources,
-		0,
-		cpuIndex, 
-		&options));*/
+		LOG(INFO) << oss.str();
 		return 0;
 	} catch(...) {
-		printf("load index '%s' failed\n", idxPath.c_str());
+		
+		oss << " error_msg:load index '"<< idxPath <<"' failed";
+		
 		if (this->index != NULL) {
 			delete this->index;
 		}
 		this->index = NULL;
+		LOG(WARNING) << oss.str();
 	}
 	return -1;
 }
 
 FaissDB::~FaissDB() {
-	printf("faissdb destruct\n");
 	delete this->index;
 	this->index = NULL;
 	//lock can't be delete;
@@ -198,9 +195,9 @@ FaissDB::~FaissDB() {
 		return;
 	}
 	if (remove(persistPath.c_str())) {
-		printf("delete persist file failed:%s\n", persistPath.c_str());
+		LOG(WARNING) << "delete faiss index file failed:" << persistPath;
 	} else {
-		printf("delete persist file OK:%s\n", persistPath.c_str());
+		LOG(INFO) << "delete faiss index file OK:" << persistPath;
 	}
 }
 
@@ -234,10 +231,9 @@ LmDB::LmDB(std::string &db_name):dbName(db_name) {
 
 	int rc = initLmdb();
 	if (rc != 0) {
-		printf("init lmdb failed\n");
+		LOG(FATAL) << "init lmdb failed";
 		exit(-1);
 	}
-	printf("lmdb construct\n");
 }
 LmDB::~LmDB() {
 	mdb_dbi_close(m_env, *m_dbi);
@@ -249,28 +245,27 @@ LmDB::~LmDB() {
 	dataFile = lmdbPath + "/data.mdb";
 	lockFile = lmdbPath + "/lock.mdb";
 	if (remove(dataFile.c_str())) {
-		printf("delete file failed:%s\n", dataFile.c_str());
+		LOG(WARNING) << "delete lmdb data file failed:" << dataFile;
 	} else {
-		printf("delete file OK:%s\n", dataFile.c_str());
+		LOG(INFO) << "delete lmdb data file OK:" << dataFile;
 	}
 	
 	if (remove(lockFile.c_str())) {
-		printf("delete file failed:%s\n", lockFile.c_str());
+		LOG(WARNING) << "delete  lmdb lock file failed:" << lockFile;
 	} else {
-		printf("delete file OK:%s\n", lockFile.c_str());
+		LOG(INFO) << "delete lmdb lock file OK:" << lockFile;
 	}
 
 	//删除raw数据文件
 	if (rmdir(lmdbPath.c_str()) != 0) {
-		printf("rm lmdb:%s failed\n", lmdbPath.c_str());
+		LOG(WARNING) << "rm lmdb dir failed:" << lmdbPath;
 	} else {
-		printf("rm lmdb:%s OK\n", lmdbPath.c_str());
+		LOG(INFO) << "rm lmdb dir OK:" << lmdbPath;
 	}
-	printf("lmdb destruct\n");
 }
 int LmDB::initLmdb() {
 	if (dbName.length() < 1) {
-		printf("dbName is empty\n");
+		LOG(WARNING) << "dbName is empty";
 		return -1;
 	}
 	int rc = 0;
@@ -278,21 +273,25 @@ int LmDB::initLmdb() {
 	rc = mdb_env_set_maxreaders(m_env, 100);
 	rc = mdb_env_set_mapsize(m_env, 10485760);
 	
+	std::ostringstream oss;
+	oss << "db_name:" << dbName
+		<< " lmdb_path:" << lmdbPath;
 	if (!mkFolder(lmdbPath)) {
-		printf("create dbPath %s failed\n", lmdbPath.c_str());
+		oss << " error_msg: create dbPath failed";
+		LOG(WARNING) << oss.str();
 		return -1;
 	}
 	rc = mdb_env_open(m_env, lmdbPath.c_str(), MDB_FIXEDMAP, 0664);
 
-	printf("mdb_env_open %d\n", rc);
+	oss << " mdb_env_open:" << rc;
 	
 	//open m_dbi	
 	MDB_txn *txn = NULL;
 	rc = mdb_txn_begin(m_env, NULL, 0, &txn);
 	rc = mdb_dbi_open(txn, NULL, 0, m_dbi);
-	printf("mdb_dbi_open %d\n", rc);
+	oss << " mdb_dbi_open:" << rc;
 	mdb_txn_abort(txn);
-
+	LOG(INFO) << oss.str();
 	return rc;
 }
 	
@@ -349,7 +348,6 @@ int FaissDB::delFeature(const size_t feaID){
 	if (MDB_NOTFOUND == rc) {
 		return grpc::StatusCode::ALREADY_EXISTS;
 	} else if (rc != 0) {
-		printf("delete feature from lmdb failed:%d\n", rc);
 		return rc;
 	}
 	//删除成功, 添加黑名单
@@ -369,15 +367,7 @@ int FaissDB::storeBlackList(char *key) {
 		return rc;
 	}
 	std::vector<long> vec(blackList.begin(), blackList.end());
-#if 0 
-	for (int i = 0; i < vec.size(); i ++) {
-		printf("black :%ld ", vec[i]);
-	}
-	printf("\n");
-#endif
-
 	int rc = lmdbSet(key, vec.data(), sizeof(long)*vec.size());
-
 	return rc;
 }
 
@@ -386,14 +376,14 @@ int FaissDB::loadBlackList(char *key) {
 	int len = 0;
 	int rc = lmdbGet(key, &ids, &len);
 	if (rc != 0) {
-		printf("get blackList return:%d\n", rc);
+		LOG(WARNING) << "get blackList return:" << rc;
 		return rc;
 	}
 
 	len = len / sizeof(long);
 	
 	if (ids == NULL) {
-		printf("get blackList return NULL\n");
+		VLOG(50) << "get blackList return NULL";
 		return -1;
 	}
 	
@@ -409,14 +399,14 @@ int FaissDB::getID(char *key, size_t *id) {
 	int len = 20;
 	int rc = lmdbGet(key, &str, &len);
 	if (MDB_NOTFOUND == rc) {
-		printf("%s not found:%d\n", SMaxIDKey, rc);
+		VLOG(50) << key << ":not found";
 		*id = 0;
 		return 0;
 	} else if (rc != 0) {
-		printf("get %s failed:%d, len:%d\n", SMaxIDKey, rc, len);
+		LOG(WARNING) << "get '" << key << "' failed:" << rc;
 		return rc;
 	} else if (len < 1 || len > 10 /*代表10^10的数量大小*/) {
-		printf("get %s failed:%d, len:%d\n", SMaxIDKey, rc, len);
+		LOG(WARNING)<< "get '" << key << "' failed: value to long(" << len << ")";
 		return -1;
 	}
 	char data[20] = {'\0'};
@@ -424,7 +414,7 @@ int FaissDB::getID(char *key, size_t *id) {
 	
 	for (int i = 0; i < len; i++) {
 		if (data[i] > '9' || data[i] < '0') {
-			printf("get %s ,len:%d, data:%s, bad data!\n", SMaxIDKey, len, data);
+			LOG(WARNING) << "get '" << key <<"' failed: bad data("<< data << ")";
 			return -1;
 		}
 	}
@@ -434,36 +424,20 @@ int FaissDB::getID(char *key, size_t *id) {
 }
 
 int FaissDB::persistIndex() {
-#if 1
-	size_t id;
-	getID(SPersistIDKey, &id);
-	printf("id:%d\n", id);
-	getID(SMaxIDKey, &id);
-	printf("id:%d\n", id);
-	int len = 20;
-	char *rs2 = new char[len];
-	std::string str1, str2;
-	lmdbGet(SPersistIDKey, &str1, &len);
-	snprintf(rs2, len + 1, "%s", str1.c_str());
-	printf("%s:%s,len:%d\n", SPersistIDKey, rs2, len);
-	
-	lmdbGet(SMaxIDKey, &str2, &len);
-	memset(rs2, 0, 20);
-	snprintf(rs2, len + 1, "%s", str2.c_str());
-	printf("%s:%s, len:%d, max_id:%ld\n", SMaxIDKey, rs2, len, (this->maxID).load(std::memory_order_relaxed));
-
-	delete rs2;
-#endif
 	size_t persistID = 0;
+	std::ostringstream oss;
 	{
 		unique_writeguard<WfirstRWLock> writelock(*(this->lock));
 		if (!this->writeFlag) { //writeFlag == true
-			printf("db[%s] need no persist\n", (this->dbName).c_str());
+			VLOG(50) << "db_name:" << this->dbName << "need no persist";
 			return 0;
 		}
+		
 		auto cpu_index = faiss::gpu::index_gpu_to_cpu (this->index);
-		printf("db[%s] maxPersistID:%ld OK\n", (this->dbName).c_str(), this->maxPersistID);
-		printf("db[%s] maxID:%ld OK\n", (this->dbName).c_str(), (this->maxID).load(std::memory_order_relaxed));
+		oss << "cmd:auto_persist_index"
+			<< " db_name:" << this->dbName
+			<< " max_persist_id:" << this->maxPersistID
+			<< " max_id:" << (this->maxID).load(std::memory_order_relaxed);
 
 		write_index(cpu_index, (this->persistPath).c_str());
 		//TODO 将黑名单中的ids顺便删除再持久化
@@ -472,7 +446,7 @@ int FaissDB::persistIndex() {
 		this->maxPersistID = (this->maxID).load(std::memory_order_relaxed);
 		persistID = this->maxPersistID;
 		delete cpu_index;
-		printf("db[%s] store to %s OK\n", (this->dbName).c_str(), (this->persistPath).c_str());
+		oss << " persist_path:" << this->persistPath;
 	}
 
 	//持久化index时将persistID写入lmdb中
@@ -481,8 +455,8 @@ int FaissDB::persistIndex() {
 
 	sprintf(val, "%ld", persistID);
 	int rc = lmdbSet(SPersistIDKey, val);
-	printf("persist to lmdb res:%d \n", rc);
-
+	oss << " set_lmdb:" << rc;
+	LOG(INFO) << oss.str();
 	return 0;
 }
 int LmDB::lmdbDel(char *_key) {
@@ -494,7 +468,7 @@ int LmDB::lmdbDel(char *_key) {
 	key.mv_data = _key;
 
 	rc = mdb_del(txn, *m_dbi, &key, NULL);
-	printf("key.size %d, key.data %s, delete res:%d\n", (int)key.mv_size, (char *)key.mv_data, rc);
+	LOG(INFO) << "delete" << _key <<" resp:" << rc;
 	if (MDB_NOTFOUND == rc) {
 		mdb_txn_abort(txn);	
 		return rc;
@@ -507,7 +481,7 @@ int LmDB::lmdbSet(char *key1, void *val1, int len1, char *key2, void *val2, int 
 	
 	MDB_txn *txn = NULL;
 	int rc = mdb_txn_begin(m_env, NULL, 0, &txn);
-	printf("mdb_txn_begin %d\n", rc);
+	VLOG(50) << "mdb_txn_begin res:" << rc;
 	MDB_val key, data;
 	key.mv_size = strlen(key1);
 	key.mv_data = key1;
@@ -524,10 +498,10 @@ int LmDB::lmdbSet(char *key1, void *val1, int len1, char *key2, void *val2, int 
 	rc = mdb_txn_commit(txn);
 	
 	if (rc != 0) {
-		printf("add multi-data to lmdb failed,id1:%s, id2:%s\n", key1, key2);
+		LOG(WARNING) << "add multi-data to lmdb failed,id1:" << key1 << " id2:" << key2;
 		return rc;
 	}
-	printf("add multi-data to lmdb OK,id1:%s, id2:%s\n", key1, key2);
+	VLOG(50) << "add multi-data to lmdb OK,id1:" << key1 << " id2:" << key2;
 	return 0;
 }
 
@@ -535,7 +509,7 @@ int LmDB::lmdbSet(char *_key, void *_val, int len) {
 	MDB_txn *txn = NULL;
 	int rc = mdb_txn_begin(m_env, NULL, 0, &txn);
 
-	printf("mdb_txn_begin %d\n", rc);
+	VLOG(50) << "mdb_txn_begin res:" << rc;
 
 	MDB_val key, data;
 	key.mv_size = std::strlen(_key);
@@ -548,18 +522,16 @@ int LmDB::lmdbSet(char *_key, void *_val, int len) {
 	rc = mdb_txn_commit(txn);
 	
 	if (rc != 0) {
-		printf("persist %s to lmdb failed\n", _key);
+		LOG(WARNING) << "store " << _key << " to lmdb failed";
 		return rc;
 	}
-	printf("persist %s to lmdb ok\n", _key);
+	VLOG(50) << "store " << _key << " to lmdb OK";
 	return 0;
 }
 
 int LmDB::lmdbSet(char *_key, char *_val) {
 	MDB_txn *txn = NULL;
 	int rc = mdb_txn_begin(m_env, NULL, 0, &txn);
-
-	printf("mdb_txn_begin %d\n", rc);
 
 	MDB_val key, data;
 	key.mv_size = std::strlen(_key);
@@ -572,10 +544,10 @@ int LmDB::lmdbSet(char *_key, char *_val) {
 	rc = mdb_txn_commit(txn);
 	
 	if (rc != 0) {
-		printf("persist %s:%s to lmdb failed\n", _key, _val);
+		LOG(WARNING) << "store " << _key << " to lmdb failed";
 		return rc;
 	}
-	printf("persist %s:%s to lmdb ok\n", _key, _val);
+	VLOG(50) << "store " << _key << " to lmdb OK";
 	return 0;
 }
 int LmDB::lmdbGet(char *_key, void **val, int *val_len) {

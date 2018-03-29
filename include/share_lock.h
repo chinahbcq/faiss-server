@@ -15,7 +15,6 @@ class WfirstRWLock
 			std::unique_lock<std::mutex> ulk(counter_mutex);
 			cond_r.wait(ulk, [=]()->bool {return write_cnt == 0; });
 			++read_cnt;
-			printf("read lock\n");
 		}
 		void lock_write()
 		{
@@ -23,7 +22,6 @@ class WfirstRWLock
 			++write_cnt;
 			cond_w.wait(ulk, [=]()->bool {return read_cnt == 0 && !inwriteflag; });
 			inwriteflag = true;
-			printf("write lock\n");
 		}
 		void release_read()
 		{
@@ -32,7 +30,6 @@ class WfirstRWLock
 			{
 				cond_w.notify_one();
 			}
-			printf("read unlock\n");
 		}
 		void release_write()
 		{
@@ -46,7 +43,6 @@ class WfirstRWLock
 				cond_w.notify_one();
 			}
 			inwriteflag = false;
-			printf("write unlock\n");
 		}
 
 	private:

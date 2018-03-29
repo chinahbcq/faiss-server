@@ -74,7 +74,7 @@ SRC = ./src
 LDFLAGS += -L/usr/local/lib -L./lib `pkg-config --libs grpc++ grpc`       \
            -lgrpc++_reflection \
 		   -Wno-deprecated-gpu-targets \
-           -lprotobuf -lpthread -ldl -lfaiss -lgpufaiss -llmdb
+           -lprotobuf -lpthread -ldl -lfaiss -lgpufaiss -llmdb  -lglog -lgflags
 PROTOC = protoc
 GRPC_CPP_PLUGIN = grpc_cpp_plugin
 GRPC_CPP_PLUGIN_PATH ?= `which $(GRPC_CPP_PLUGIN)`

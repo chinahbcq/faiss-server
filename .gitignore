@@ -1,0 +1,4 @@
+*.o
+faiss_server
+data
+client

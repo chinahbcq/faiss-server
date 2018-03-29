@@ -15,7 +15,12 @@ double elapsed ()
 Status FaissServiceImpl::DbNew(ServerContext* context,
 		const ::faiss_server::DbNewRequest* request, 
 		::faiss_server::EmptyResponse* response) {
-	printf("---------------DbNew--------------\n");
+	std::ostringstream oss;
+	oss << "request_id:" << request->request_id()
+		<< " cmd:DbNew"
+		<< " max_size:" << request->max_size()
+		<< " model:" << request->model()
+		<< " db_name:" << request->db_name();
 	double t0 = elapsed();
 	std::string dbName = request->db_name();
 	std::string model = request->model();
@@ -25,6 +30,9 @@ Status FaissServiceImpl::DbNew(ServerContext* context,
 		response->set_error_code(grpc::StatusCode::INVALID_ARGUMENT);
 		response->set_error_msg("INVALID_ARGUMENT");
 		response->set_request_id(request->request_id());
+		oss << " error_code:" << response->error_code()
+			<< " error_msg:" << response->error_msg();
+		LOG(WARNING) << oss.str();	
 		return grpc::Status::CANCELLED;
 	}
 	//检查dbs
@@ -35,6 +43,9 @@ Status FaissServiceImpl::DbNew(ServerContext* context,
 		response->set_error_code(grpc::StatusCode::ALREADY_EXISTS);
 		response->set_error_msg("ALREADY_EXISTS");
 		response->set_request_id(request->request_id());
+		oss << " error_code:" << response->error_code()
+			<< " error_msg:" << response->error_msg();
+		LOG(WARNING) << oss.str();	
 		return grpc::Status::OK;
 	}
 	
@@ -42,6 +53,7 @@ Status FaissServiceImpl::DbNew(ServerContext* context,
 	if (request->max_size() > 1 && request->max_size() < MaxDBSize) {
 		maxSize = request->max_size();
 	}
+	oss << " new_max_size:" << maxSize;
 	//模型路径
 	std::string modelPath = "./model/" + request->model();
 
@@ -49,17 +61,19 @@ Status FaissServiceImpl::DbNew(ServerContext* context,
 	FaissDB *db = new FaissDB(dbName, modelPath, maxSize);
 	int rc = db->loadIndex(m_resources, modelPath);
 	if (0 != rc) {
-		printf("load index failed\n");
 		response->set_error_code(grpc::StatusCode::DATA_LOSS);
 		response->set_error_msg("load index failed");
 		response->set_request_id(request->request_id());
+		oss << " error_code:" << response->error_code()
+			<< " error_msg:" << response->error_msg();
+		LOG(WARNING) << oss.str();	
 		return Status::OK;
 	}
 
 	dbs[dbName] = db;
 
 	//store kv format
-	//	dbName:modelPath##maxSize
+	//dbName:modelPath##maxSize
 	//dbName: 增加一个前缀后再入库
 	//modelPath: 初始化的模型文件 
 	//maxSize: 用于设置某个db的最大feature的大小
@@ -69,22 +83,26 @@ Status FaissServiceImpl::DbNew(ServerContext* context,
 	snprintf(key, len, "%s%s", SPrefix.c_str(), dbName.c_str());
 	snprintf(val, len, "%s%s%ld", modelPath.c_str(), SDivide.c_str(), maxSize);
 	rc = lmdbSet(key, val);
-	printf("persist %s:%s to lmdb %d\n", key, val, rc);
 	response->set_error_code(rc);
 	response->set_request_id(request->request_id());
-
+	oss << " persist_info:(" << key << ":" << val <<") store resp " << rc
+		<< " error_code:" << response->error_code();
+	LOG(INFO) << oss.str();
 	return Status::OK; 
 }
 //db list
 Status FaissServiceImpl::DbList(ServerContext* context, const ::faiss_server::DbListRequest* request, ::faiss_server::DbListResponse* response) {
-	printf("---------------DbList--------------\n");
+	std::ostringstream oss;
+	oss << "request_id:" << request->request_id()
+		<< " cmd:DbList";
 
 	//no lock	
 	response->set_request_id(request->request_id());
 	response->set_error_code(grpc::StatusCode::OK);
+	int count = 0;
 	for (std::map<std::string, FaissDB*>::iterator it = dbs.begin();
 			it != dbs.end(); ++it) {
-		printf("dbName:%s\n", (it->first).c_str());
+		count ++;
 		auto status = response->add_db_status();
 		auto db = it->second; 
 		status->set_name(it->first);
@@ -102,12 +120,18 @@ Status FaissServiceImpl::DbList(ServerContext* context, const ::faiss_server::Db
 		}
 		status->set_black_list_len((db->blackList).size());
 	}
+	oss << " db_len:" << count
+		<< " error_code:" << response->error_code();
+	LOG(INFO) << oss.str();
 	return Status::OK;
 } 
 
 //db delete 
 Status FaissServiceImpl::DbDel(ServerContext* context, const ::faiss_server::DbDelRequest* request, ::faiss_server::EmptyResponse* response) { 
-	printf("---------------DbDel--------------\n");
+	std::ostringstream oss;
+	oss << "request_id:" << request->request_id()
+		<< " cmd:DbDel"
+		<< " db_name:" << request->db_name();
 
 	std::string dbName = request->db_name();
 	//校验参数
@@ -115,6 +139,9 @@ Status FaissServiceImpl::DbDel(ServerContext* context, const ::faiss_server::DbD
 		response->set_error_code(grpc::StatusCode::INVALID_ARGUMENT);
 		response->set_error_msg("INVALID_ARGUMENT");
 		response->set_request_id(request->request_id());
+		oss << " error_code:" << response->error_code()
+			<< " error_msg:" << response->error_msg();
+		LOG(WARNING) << oss.str();	
 		return grpc::Status::CANCELLED;
 	}
 
@@ -140,6 +167,8 @@ Status FaissServiceImpl::DbDel(ServerContext* context, const ::faiss_server::DbD
 
 			response->set_error_code(grpc::StatusCode::OK);
 			response->set_request_id(request->request_id());
+			oss << " error_code:" << response->error_code();
+			LOG(INFO) << oss.str();	
 			return grpc::Status::OK;
 		}
 	}	
@@ -147,5 +176,8 @@ Status FaissServiceImpl::DbDel(ServerContext* context, const ::faiss_server::DbD
 	response->set_request_id(request->request_id());
 	response->set_error_code(grpc::StatusCode::NOT_FOUND);
 	response->set_error_msg("NOT_FOUND");
+	oss << " error_code:" << response->error_code()
+		<< " error_msg:" << response->error_msg();
+	LOG(WARNING) << oss.str();	
 	return Status::OK;
 } 
