@@ -2,3 +2,4 @@
 faiss_server
 data
 client
+demo_ivfpq_indexing.cpp
