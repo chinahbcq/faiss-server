@@ -9,8 +9,8 @@ using grpc::Status;
 
 DEFINE_string(host, "0.0.0.0", "the server host");
 DEFINE_int32(port, 3838, "the server port");
-DEFINE_int32(showlog, 50, "show log level");
 DEFINE_int32(persist_time, 10, "persist time");
+
 void RunServer()
 {
 	std::string srv = FLAGS_host + ":" + std::to_string(FLAGS_port);
@@ -27,6 +27,7 @@ void RunServer()
 	th.join();
 	server->Wait();
 }
+
 int main(int argc, char **argv)
 {
 	google::InitGoogleLogging(argv[0]);

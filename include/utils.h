@@ -16,7 +16,6 @@ const uint64_t DefaultDBSize = 100000000;
 const uint64_t MaxDBSize     = 10000000000;	
 const float EuclidThresh     = 30.0f;	
 static int NProbes			 = 32;
-
 const int FIXLEN = 10;
 
 bool checkPathExists(std::string &path);
