@@ -81,7 +81,7 @@ Status FaissServiceImpl::HSearch(ServerContext* context,
 		if (db->inBlackList(nns[j])) {
 			continue;
 		}	
-		if (dis[j] > EuclidThresh) {
+		if (dis[j] > globalConfig.EuclidThresh) {
 			break;
 		}
 		float dist = dis[j];

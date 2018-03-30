@@ -24,6 +24,7 @@ void FaissServiceImpl::PersistIndexPeriod(FaissServiceImpl *handle,const unsigne
 			for (auto it = dbs->begin(); it != dbs->end(); it++) {
 				auto db = it->second;
 				db->persistIndex();
+				//db->status();
 			}
 		}
 	}

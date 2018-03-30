@@ -71,16 +71,15 @@ int LmDB::initLmdb() {
 	return rc;
 }
 
-int LmDB::lmdbDel(char *_key) {
+int LmDB::lmdbDel(const char *_key) {
 	MDB_txn *txn;
 	int rc = mdb_txn_begin(m_env, NULL, 0, &txn);
 	MDB_val key;
 
 	key.mv_size = strlen(_key);
-	key.mv_data = _key;
+	key.mv_data = const_cast<char*>(_key);
 
 	rc = mdb_del(txn, *m_dbi, &key, NULL);
-	LOG(INFO) << "delete" << _key <<" resp:" << rc;
 	if (MDB_NOTFOUND == rc) {
 		mdb_txn_abort(txn);	
 		return rc;
@@ -89,20 +88,20 @@ int LmDB::lmdbDel(char *_key) {
 	return rc;
 }
 
-int LmDB::lmdbSet(char *key1, void *val1, int len1, char *key2, void *val2, int len2) {
+int LmDB::lmdbSet(const char *key1, void *val1, int len1, const char *key2, void *val2, int len2) {
 	
 	MDB_txn *txn = NULL;
 	int rc = mdb_txn_begin(m_env, NULL, 0, &txn);
 	VLOG(50) << "mdb_txn_begin res:" << rc;
 	MDB_val key, data;
 	key.mv_size = strlen(key1);
-	key.mv_data = key1;
+	key.mv_data = const_cast<char*>(key1);
 	data.mv_size = len1;
 	data.mv_data = val1;
 	rc = mdb_put(txn, *m_dbi, &key, &data, 0);
 	
 	key.mv_size = strlen(key2);
-	key.mv_data = key2;
+	key.mv_data = const_cast<char*>(key2);
 	data.mv_size = len2;
 	data.mv_data = val2;
 	rc = mdb_put(txn, *m_dbi, &key, &data, 0);
@@ -117,7 +116,7 @@ int LmDB::lmdbSet(char *key1, void *val1, int len1, char *key2, void *val2, int 
 	return 0;
 }
 
-int LmDB::lmdbSet(char *_key, void *_val, int len) {
+int LmDB::lmdbSet(const char *_key, void *_val, int len) {
 	MDB_txn *txn = NULL;
 	int rc = mdb_txn_begin(m_env, NULL, 0, &txn);
 
@@ -125,7 +124,7 @@ int LmDB::lmdbSet(char *_key, void *_val, int len) {
 
 	MDB_val key, data;
 	key.mv_size = strlen(_key);
-	key.mv_data = _key;
+	key.mv_data = const_cast<char*>(_key);
 	
 	data.mv_size = len;
 	data.mv_data = _val;
@@ -141,13 +140,13 @@ int LmDB::lmdbSet(char *_key, void *_val, int len) {
 	return 0;
 }
 
-int LmDB::lmdbSet(char *_key, char *_val) {
+int LmDB::lmdbSet(const char *_key, char *_val) {
 	MDB_txn *txn = NULL;
 	int rc = mdb_txn_begin(m_env, NULL, 0, &txn);
 
 	MDB_val key, data;
 	key.mv_size = strlen(_key);
-	key.mv_data = _key;
+	key.mv_data = const_cast<char*>(_key);
 	
 	data.mv_size = strlen(_val);
 	data.mv_data = _val;
@@ -162,13 +161,13 @@ int LmDB::lmdbSet(char *_key, char *_val) {
 	VLOG(50) << "store " << _key << " to lmdb OK";
 	return 0;
 }
-int LmDB::lmdbGet(char *_key, void **val, int *val_len) {
+int LmDB::lmdbGet(const char *_key, void **val, int *val_len) {
 	MDB_txn *txn = NULL;
 	int rc = mdb_txn_begin(m_env, NULL, MDB_RDONLY, &txn);
 
 	MDB_val key, data;
 	key.mv_size = strlen(_key);
-	key.mv_data = _key;
+	key.mv_data = const_cast<char*>(_key);
 	
 	rc = mdb_get(txn, *m_dbi, &key, &data);
 	mdb_txn_abort(txn);	
@@ -179,13 +178,13 @@ int LmDB::lmdbGet(char *_key, void **val, int *val_len) {
 	}
 	return rc;
 }
-int LmDB::lmdbGet(char *_key, std::string *_val, int *val_len) {
+int LmDB::lmdbGet(const char *_key, std::string *_val, int *val_len) {
 	MDB_txn *txn = NULL;
 	int rc = mdb_txn_begin(m_env, NULL, MDB_RDONLY, &txn);
 
 	MDB_val key, data;
 	key.mv_size = strlen(_key);
-	key.mv_data = _key;
+	key.mv_data = const_cast<char*>(_key);
 	
 	data.mv_size = *val_len; 
 	char buf[*val_len] = {'\0'};

@@ -118,7 +118,7 @@ Status FaissServiceImpl::HDel(ServerContext* context,
 	//index->remove_ids(range);	
 
 	int rc = db->delFeature(id);
-	oss << " delete_feature:" << rc;
+	oss << " delete_rs:" << rc;
 	if (rc == grpc::StatusCode::ALREADY_EXISTS) {
 		//found
 		response->set_error_code(ALREADY_EXISTS);

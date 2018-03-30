@@ -160,14 +160,12 @@ Status FaissServiceImpl::DbDel(ServerContext* context, const ::faiss_server::DbD
 			dbs.erase(it);
 			
 			//delete lmdb storage 
-			size_t len = 128;
-			char key[len] ={'\0'};
-			snprintf(key, len, "%s%s", SPrefix.c_str(), dbName.c_str());
-			lmdbDel(key);
-
+			std::string key = SPrefix + dbName;
+			int rc = lmdbDel(key.c_str());
 			response->set_error_code(grpc::StatusCode::OK);
 			response->set_request_id(request->request_id());
-			oss << " error_code:" << response->error_code();
+			oss << " delete_res:" << rc
+				<< " error_code:" << response->error_code();
 			LOG(INFO) << oss.str();	
 			return grpc::Status::OK;
 		}

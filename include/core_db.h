@@ -23,14 +23,14 @@ class LmDB {
 		MDB_env *m_env;
 		MDB_dbi *m_dbi;
 			
-		int lmdbSet(char *key, char *val);
-		int lmdbSet(char *key, void *val, int len);
-		int lmdbSet(char *key1, void *val1, int len1, char *key2, void *val2, int len2); 
+		int lmdbSet(const char *key, char *val);
+		int lmdbSet(const char *key, void *val, int len);
+		int lmdbSet(const char *key1, void *val1, int len1, const char *key2, void *val2, int len2); 
 
-		int lmdbDel(char *key);
+		int lmdbDel(const char *key);
 		
-		int lmdbGet(char *key, std::string *val, int *val_len);
-		int lmdbGet(char *key, void **val, int *val_len);
+		int lmdbGet(const char *key, std::string *val, int *val_len);
+		int lmdbGet(const char *key, void **val, int *val_len);
 
 };
 

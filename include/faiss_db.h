@@ -59,18 +59,21 @@ class FaissDB:public LmDB {
 
 		//计算输入p1与lmdb中的某个ID的cosine距离		
 		int calcCosine(const float *p1, long id, float *dis);
+
+		//内部基础状态信息
+		void status();
 	
 	private:
 		//get stored maxPersistID or maxID
-		int getID(char *key, size_t *id);
+		int getID(const char *key, size_t *id);
 
 		//store blackList to lmdb
 		//should call with a writelock
-		int storeBlackList(char *key);
+		int storeBlackList(const char *key);
 		
 		//load blackList from lmdb	
 		//should call with a writelock
-		int loadBlackList(char *key);
+		int loadBlackList(const char *key);
 		
 		//从lmdb中加载未持久化的特征到index中
 		int loadLostIndex();

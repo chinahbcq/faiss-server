@@ -6,17 +6,26 @@
 #include <unistd.h>
 #include <string>
 
-static char* SPersistIDKey		= "PERSIST_ID";
-static char* SMaxIDKey			= "MAX_ID";
-static char* SBlackListKey		= "BLACKLIST_KEY";
+//全部配置
+struct GlobalConfig {
+	float EuclidThresh;
+	int NProbes;
+	std::string Host;
+	int Port;
+	int PersistTime;
+};
+
+static std::string SPersistIDKey		= "PERSIST_ID";
+static std::string SMaxIDKey			= "MAX_ID";
+static std::string SBlackListKey		= "BLACKLIST_KEY";
 static std::string SGlobalDBName = ".global";
 static std::string SPrefix = "DB:";
 static std::string SDivide = "##";
 const uint64_t DefaultDBSize = 100000000;	
 const uint64_t MaxDBSize     = 10000000000;	
-const float EuclidThresh     = 30.0f;	
-static int NProbes			 = 32;
 const int FIXLEN = 10;
+
+extern GlobalConfig globalConfig;
 
 bool checkPathExists(std::string &path);
 

@@ -10,6 +10,29 @@ FaissDB::FaissDB(std::string &db_name,
 	maxID = 0;
 	writeFlag = true;
 }
+
+void FaissDB::status() {
+	int numList = this->index->getNumLists();
+	LOG(INFO) << "db_name:" << this->dbName << " num_list:" << numList;
+	std::ostringstream oss;
+
+	for (int i = 0; i < numList; i ++) {
+		int len = this->index->getListLength(i);
+		if (len > 0) {
+			oss << " 	list_id:" << i << " list_len:" << len << " list_idx:";
+			auto idx = this->index->getListIndices(i);
+			for (int j = 0; j < idx.size(); j ++) {
+				oss << idx[j] << ",";
+			}
+			oss << " list_codes:";
+			auto codes = this->index->getListCodes(i);
+			for (int j = 0; j < codes.size(); j ++) {
+				oss << uint32_t(codes[j]) << ",";
+			}
+		}		
+	}
+	LOG(INFO) << oss.str();
+}
 int FaissDB::reload(StandardGpuResources *rs) {
 	std::ostringstream oss;
 	bool rt = checkPathExists(this->persistPath);	
@@ -18,7 +41,7 @@ int FaissDB::reload(StandardGpuResources *rs) {
 	int rc = 0, rc2 = 0;
 	if (rt) {//持久化文件存在 
 		//加载黑名单
-		rc2 = this->loadBlackList(SBlackListKey);
+		rc2 = this->loadBlackList(SBlackListKey.c_str());
 		if (rc2 != MDB_NOTFOUND && rc2 !=  0) { //没有黑名单可加载
 			oss << " error_msg: load black_list failed:" << rc;
 			LOG(WARNING) << oss.str();
@@ -50,7 +73,7 @@ int FaissDB::reload(StandardGpuResources *rs) {
 			return rc;
 		}
 		// 考虑这种情况下，也可能存在删除黑名单,这将是非法数据
-		rc = lmdbDel(SBlackListKey);
+		rc = lmdbDel(SBlackListKey.c_str());
 		if (rc == MDB_NOTFOUND) {
 			LOG(INFO) << oss.str();	
 			return 0;
@@ -71,8 +94,8 @@ int FaissDB::loadLostIndex() {
 	}
 	size_t maxID, maxPersistID;
 	int rc1, rc2;
-	rc1 = this->getID(SPersistIDKey, &maxPersistID);
-	rc2 = this->getID(SMaxIDKey, &maxID);
+	rc1 = this->getID(SPersistIDKey.c_str(), &maxPersistID);
+	rc2 = this->getID(SMaxIDKey.c_str(), &maxID);
 	if (rc1 != 0 || rc2 != 0) {
 		return -1;
 	}
@@ -134,7 +157,10 @@ int FaissDB::loadIndex(StandardGpuResources *resources,std::string &idxPath) {
 		faiss::IndexIVFPQ *cpu_index = dynamic_cast<faiss::IndexIVFPQ *>(file_index);
 		oss << "idx_path:" << idxPath
 			<< " black_size:" << blackList.size()
-			<< " cpu_ntotal:" << cpu_index->ntotal;
+			<< " cpu_ntotal:" << cpu_index->ntotal
+			<< " nprobe:" << cpu_index->nprobe
+			<< " code_size:" << cpu_index->code_size;
+			
 		if (blackList.size() > 0) {//若黑名单不为空
 			auto start = blackList.begin();
 			auto end = blackList.end();
@@ -152,7 +178,7 @@ int FaissDB::loadIndex(StandardGpuResources *resources,std::string &idxPath) {
 
 			//需要跟index一起，将blackList持久化,否则出现数据不一致
 			blackList.clear();
-			int rc = lmdbDel(SBlackListKey);
+			int rc = lmdbDel(SBlackListKey.c_str());
 			if (rc == MDB_NOTFOUND) {
 				//nothing
 			} else if (rc != 0) {
@@ -164,7 +190,7 @@ int FaissDB::loadIndex(StandardGpuResources *resources,std::string &idxPath) {
 		}
 
 		this->index = new GpuIndexIVFPQ(resources, cpu_index, config);
-		this->index->setNumProbes(NProbes);
+		this->index->setNumProbes(globalConfig.NProbes);
 
 		oss << " dim:" << index->d
 			<< " gpu_ntotal:" << index->ntotal;
@@ -242,9 +268,8 @@ int FaissDB::addFeature(float *feature, const size_t len, long *id) {
 	encodeID(feaID, *id);
 
 	sprintf(maxIDVal, "%ld", *id);
-	char *maxIDKey = SMaxIDKey;
 	return lmdbSet(feaID, feature, sizeof(float)*len, 
-			maxIDKey, maxIDVal, strlen(maxIDVal));
+			SMaxIDKey.c_str(), maxIDVal, strlen(maxIDVal));
 }
 int FaissDB::getFeature(const size_t feaID, float **feature, size_t *len) {
 	char keyData[20] = {'\0'};
@@ -282,12 +307,12 @@ int FaissDB::delFeature(const size_t feaID){
 	blackList->insert(feaID);
 
 	//持久化黑名单
-	rc = this->storeBlackList(SBlackListKey);
+	rc = this->storeBlackList(SBlackListKey.c_str());
 
 	return rc;
 }
 
-int FaissDB::storeBlackList(char *key) {
+int FaissDB::storeBlackList(const char *key) {
 	//持久化黑名单
 	if (blackList.size() < 1) {
 		//将黑名单删除
@@ -299,7 +324,7 @@ int FaissDB::storeBlackList(char *key) {
 	return rc;
 }
 
-int FaissDB::loadBlackList(char *key) {
+int FaissDB::loadBlackList(const char *key) {
 	void *ids = NULL;
 	int len = 0;
 	int rc = lmdbGet(key, &ids, &len);
@@ -319,7 +344,7 @@ int FaissDB::loadBlackList(char *key) {
 
 	return 0;
 }
-int FaissDB::getID(char *key, size_t *id) {
+int FaissDB::getID(const char *key, size_t *id) {
 	if (NULL == key) {
 		return -1;
 	}
@@ -382,7 +407,7 @@ int FaissDB::persistIndex() {
 	char val[20] = {'\0'};
 
 	sprintf(val, "%ld", persistID);
-	int rc = lmdbSet(SPersistIDKey, val);
+	int rc = lmdbSet(SPersistIDKey.c_str(), val);
 	oss << " set_lmdb:" << rc;
 	LOG(INFO) << oss.str();
 	return 0;
