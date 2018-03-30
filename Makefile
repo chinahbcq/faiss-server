@@ -85,7 +85,7 @@ vpath %.proto $(PROTOS_PATH)
 
 all: faiss_server 
 
-faiss_server: faiss_def.pb.o faiss_def.grpc.pb.o faiss_common.o faiss_db.o faiss_feature.o faiss_search.o core_db.o utils.o main.o
+faiss_server: faiss_def.pb.o faiss_def.grpc.pb.o faiss_common.o faiss_db.o faiss_feature.o faiss_search.o core_db.o faiss_server.o utils.o main.o
 	$(NVCC) $(LDFLAGS) -o $@ $^ -Xcompiler -fopenmp -lcublas $(BLASLDFLAGSNVCC)
 .PRECIOUS: %.grpc.pb.cc
 %.grpc.pb.cc: %.proto

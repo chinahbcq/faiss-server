@@ -6,7 +6,7 @@
 #include <thread>
 #include <grpc++/grpc++.h>
 #include <pthread.h>
-#include "core_db.h"
+#include "faiss_db.h"
 
 using grpc::Server;
 using grpc::ServerBuilder;
