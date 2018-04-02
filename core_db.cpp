@@ -1,5 +1,5 @@
 #include "core_db.h"
-LmDB::LmDB(std::string &db_name):dbName(db_name) {
+LmDB::LmDB(std::string &db_name, size_t max_size):dbName(db_name),maxSize(max_size) {
 	m_env = NULL;
 	m_dbi = new MDB_dbi;
 	
@@ -39,6 +39,19 @@ LmDB::~LmDB() {
 		LOG(INFO) << "rm lmdb dir OK:" << lmdbPath;
 	}
 }
+
+size_t LmDB::getMapSize() {
+	const size_t minSize = 100UL * 1024UL * 1024UL; /* minimal 100MB */
+	const size_t defaultSize = 4UL * 1024UL * 1024UL * 1024UL * 1024UL; /* maximum 4TB */
+	const size_t maxFeatureSize = sizeof(float) * 512;
+	const size_t itemSize = maxFeatureSize + 12;
+
+	if (maxSize == 0) {
+		return defaultSize;
+	} 
+	return std::max(maxSize * itemSize, minSize);
+}
+
 int LmDB::initLmdb() {
 	if (dbName.length() < 1) {
 		LOG(WARNING) << "dbName is empty";
@@ -47,7 +60,8 @@ int LmDB::initLmdb() {
 	int rc = 0;
 	rc = mdb_env_create(&m_env);
 	rc = mdb_env_set_maxreaders(m_env, 100);
-	rc = mdb_env_set_mapsize(m_env, 10485760);
+	//rc = mdb_env_set_mapsize(m_env, 10485760);
+	rc = mdb_env_set_mapsize(m_env, getMapSize());
 	
 	std::ostringstream oss;
 	oss << "db_name:" << dbName
@@ -57,7 +71,7 @@ int LmDB::initLmdb() {
 		LOG(WARNING) << oss.str();
 		return -1;
 	}
-	rc = mdb_env_open(m_env, lmdbPath.c_str(), MDB_FIXEDMAP, 0664);
+	rc = mdb_env_open(m_env, lmdbPath.c_str(), 0, 0664);
 
 	oss << " mdb_env_open:" << rc;
 	

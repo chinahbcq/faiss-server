@@ -2,7 +2,7 @@
 
 FaissDB::FaissDB(std::string &db_name, 
 		std::string &model_path,
-		size_t max_size):LmDB(db_name),modelPath(model_path), maxSize(max_size) {
+		size_t max_size):LmDB(db_name,max_size),modelPath(model_path) {
 	lock = new WfirstRWLock;
 	index = NULL;
 	persistPath = "./data/" + db_name + ".index";

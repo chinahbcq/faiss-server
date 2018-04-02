@@ -118,7 +118,7 @@ int FaissServiceImpl::LoadLocalDBs() {
 	return 0;
 }
 
-FaissServiceImpl::FaissServiceImpl():LmDB(SGlobalDBName),
+FaissServiceImpl::FaissServiceImpl():LmDB(SGlobalDBName,0),
 	m_resources(NULL), m_lock(NULL) {
 	int rc = InitServer();
 	if (rc != 0) {

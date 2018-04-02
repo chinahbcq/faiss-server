@@ -80,10 +80,6 @@ class FaissDB:public LmDB {
 		
 	public:
 		GpuIndexIVFPQ *index;
-		
-		//max size of features
-		//ntotal of index should less than maxSize
-		size_t maxSize;
 
 		//index persist path
 		std::string persistPath;

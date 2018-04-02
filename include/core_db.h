@@ -14,11 +14,16 @@ class LmDB {
 		//database name
 		std::string dbName;
 		std::string lmdbPath;
-		LmDB(std::string &dbName);
+		//max size of features
+		//ntotal of index should less than maxSize
+		size_t maxSize;
+
+		LmDB(std::string &dbName, size_t maxSize);
 		~LmDB();
 	private:
 		int initLmdb();
-	
+		
+		size_t getMapSize();
 	protected:
 		MDB_env *m_env;
 		MDB_dbi *m_dbi;
