@@ -22,6 +22,9 @@ class FaissServiceImpl final : public FaissService::Service, public LmDB {
 		
 		//share lock for dbs
 		WfirstRWLock *m_lock;
+
+		//all dbs share only one gpu_lock
+		WfirstRWLock *gpu_lock;
 		
 		int InitServer();
 

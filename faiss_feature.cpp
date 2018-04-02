@@ -12,6 +12,18 @@ Status FaissServiceImpl::HSet(ServerContext* context,
 		<< " db_name:" << request->db_name();
 
 	response->set_request_id(request->request_id());
+	
+	std::string feaStr = request->feature();
+	if (feaStr.length() < 1) {
+		response->set_error_code(INVALID_ARGUMENT);	
+		response->set_error_msg("INVALID_ARGUMENT: feature");
+		oss << " error_code:" << response->error_code()
+			<< " error_msg:" << response->error_msg();
+		LOG(WARNING) << oss.str();	
+		return Status::OK;
+	}
+	
+	unique_readguard<WfirstRWLock> readlock(*m_lock);
 	std::string dbName = request->db_name();
 	std::map<std::string, FaissDB*>::iterator it;
 	it = dbs.find(dbName);
@@ -24,15 +36,6 @@ Status FaissServiceImpl::HSet(ServerContext* context,
 		return Status::OK;
 	}
 
-	std::string feaStr = request->feature();
-	if (feaStr.length() < 1) {
-		response->set_error_code(INVALID_ARGUMENT);	
-		response->set_error_msg("INVALID_ARGUMENT: feature");
-		oss << " error_code:" << response->error_code()
-			<< " error_msg:" << response->error_msg();
-		LOG(WARNING) << oss.str();	
-		return Status::OK;
-	}
 	FaissDB *db = it->second;
 	auto index = db->index;
 
@@ -94,6 +97,8 @@ Status FaissServiceImpl::HDel(ServerContext* context,
 		<< " db_name:" << request->db_name();
 
 	std::string dbName = request->db_name();
+
+	unique_readguard<WfirstRWLock> readlock(*m_lock);
 	std::map<std::string, FaissDB*>::iterator it;
 	it = dbs.find(dbName);
 
@@ -147,6 +152,8 @@ Status FaissServiceImpl::HGet(ServerContext* context,
 		<< " db_name:" << request->db_name();
 	std::string dbName = request->db_name();
 	std::map<std::string, FaissDB*>::iterator it;
+	
+	unique_readguard<WfirstRWLock> readlock(*m_lock);
 	it = dbs.find(dbName);
 
 	if (it == dbs.end()) {

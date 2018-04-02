@@ -42,6 +42,11 @@ int FaissServiceImpl::InitServer() {
 		return -1;
 	}
 
+	gpu_lock = new WfirstRWLock;
+	if (NULL == gpu_lock) {
+		return -1;
+	}
+
 	//加载本地已有的db
 	int rc = LoadLocalDBs();
 	if (0 != rc) {
@@ -94,7 +99,7 @@ int FaissServiceImpl::LoadLocalDBs() {
 		oss << " modelPath:" << modelPath 
 			<< " maxSize:" << maxSize;
 		//插入新的db
-		FaissDB *db = new FaissDB(dbName, modelPath, maxSize);
+		FaissDB *db = new FaissDB(dbName, modelPath, maxSize, this->gpu_lock);
 		int rc = db->reload(m_resources);
 		oss << " res:" << rc;
 		if (rc == ErrorCode::OK) {

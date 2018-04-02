@@ -2,8 +2,8 @@
 
 FaissDB::FaissDB(std::string &db_name, 
 		std::string &model_path,
-		size_t max_size):LmDB(db_name,max_size),modelPath(model_path) {
-	lock = new WfirstRWLock;
+		size_t max_size,
+		WfirstRWLock *gpu_lock):LmDB(db_name,max_size),modelPath(model_path), lock(gpu_lock) {
 	index = NULL;
 	persistPath = "./data/" + db_name + ".index";
 	maxPersistID = 0;
@@ -138,9 +138,12 @@ int FaissDB::loadLostIndex() {
 			LOG(WARNING) << oss.str();
 			return -1;
 		}
-		//将特征添加进index	
-		long _id = (long)id;
-		index->add_with_ids(1, feature, &_id);
+		//将特征添加进index
+		{
+			unique_writeguard<WfirstRWLock> writelock(*(this->lock));	
+			long _id = (long)id;
+			index->add_with_ids(1, feature, &_id);
+		}
 	}
 	
 	writeFlag = true;
@@ -189,9 +192,11 @@ int FaissDB::loadIndex(StandardGpuResources *resources,std::string &idxPath) {
 			oss << " delete_black_list:ok";
 		}
 
-		this->index = new GpuIndexIVFPQ(resources, cpu_index, config);
-		this->index->setNumProbes(globalConfig.NProbes);
-
+		{
+			unique_writeguard<WfirstRWLock> writelock(*(this->lock));
+			this->index = new GpuIndexIVFPQ(resources, cpu_index, config);
+			this->index->setNumProbes(globalConfig.NProbes);
+		}
 		oss << " dim:" << index->d
 			<< " gpu_ntotal:" << index->ntotal;
 		delete file_index;
@@ -379,13 +384,13 @@ int FaissDB::getID(const char *key, size_t *id) {
 int FaissDB::persistIndex() {
 	size_t persistID = 0;
 	std::ostringstream oss;
+	
+	if (!this->writeFlag) { //writeFlag == true
+		VLOG(50) << "db_name:" << this->dbName << "need no persist";
+		return 0;
+	}
 	{
 		unique_writeguard<WfirstRWLock> writelock(*(this->lock));
-		if (!this->writeFlag) { //writeFlag == true
-			VLOG(50) << "db_name:" << this->dbName << "need no persist";
-			return 0;
-		}
-		
 		auto cpu_index = faiss::gpu::index_gpu_to_cpu (this->index);
 		oss << "cmd:auto_persist_index"
 			<< " db_name:" << this->dbName

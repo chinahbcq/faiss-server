@@ -21,9 +21,13 @@ class FaissDB:public LmDB {
 		 *		faiss index 持久化默认地址： ./data/${dbName}.index
 		 *		faiss raw feature 持久化默认地址: ./data/${dbName}/data.mdb
 		 * modelPath: faiss index使用的模型路径
-		 *
+		 * maxSize: max number of features
+		 * gpuLock: global lock for all dbs when communicate with GPU
 		 */
-		FaissDB(std::string &dbName, std::string &modelPath, size_t maxSize);
+		FaissDB(std::string &dbName, 
+			std::string &modelPath, 
+			size_t maxSize,
+			WfirstRWLock *gpuLock);
 		~FaissDB();
 
 		//initialize
