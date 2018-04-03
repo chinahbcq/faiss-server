@@ -23,7 +23,7 @@ void RunServer()
 	globalConfig.EuclidThresh = FLAGS_euclid_thresh;
 	globalConfig.NProbes = FLAGS_nprobes;
 
-	std::string srv = FLAGS_host + ":" + std::to_string(FLAGS_port);
+	std::string srv = globalConfig.Host + ":" + std::to_string(globalConfig.Port);
 	std::string server_address(srv);
 	FaissServiceImpl service;
 	ServerBuilder builder;
@@ -33,7 +33,7 @@ void RunServer()
 	LOG(INFO)<< "Server start on " << server_address << std::endl;
 	
 	//persist thread
-	std::thread th(FaissServiceImpl::PersistIndexPeriod, &service, FLAGS_persist_time);
+	std::thread th(FaissServiceImpl::PersistIndexPeriod, &service, globalConfig.PersistTime);
 	th.join();
 	server->Wait();
 }
